@@ -1179,19 +1179,30 @@
     let editId = null, curHid = null;
 
     async function initDb() {
-      const { data, error } = await supabase.from('clients').select('*');
-      if (error) {
-        console.error('Error loading Supabase data:', error);
-      } else if (data && data.length > 0) {
-        clients = data;
-      } else {
-        const local = JSON.parse(localStorage.getItem('cv2_clients') || 'null');
-        if (local && local.length > 0) {
-          clients = local;
-          save(); // migrate to cloud
+      try {
+        const { data, error } = await supabase.from('clients').select('*');
+        if (error) {
+          console.error('Error loading Supabase data:', error);
+          loadLocal();
+        } else if (data && data.length > 0) {
+          clients = data.map(c => ({...c, purchases: c.purchases || []}));
+        } else {
+          loadLocal();
         }
+      } catch(err) {
+        console.error('Network or init error:', err);
+        loadLocal();
       }
       render();
+    }
+
+    function loadLocal() {
+      try {
+        const local = JSON.parse(localStorage.getItem('cv2_clients') || 'null');
+        if (local && local.length > 0) {
+          clients = local.map(c => ({...c, purchases: c.purchases || []}));
+        }
+      } catch(e) { console.error('Local JSON Error:', e); }
     }
     initDb();
 
@@ -1211,9 +1222,10 @@
     }
     function fmtM(n) { return '₹' + Math.round(Number(n)).toLocaleString('en-IN'); }
     function totalSpent(c) {
-      let sum = c.purchases.reduce((s, p) => s + p.qty * p.price, 0);
+      const ps = c.purchases || [];
+      let sum = ps.reduce((s, p) => s + p.qty * p.price, 0);
       if (c.shippingCharges) {
-        const uDates = new Set(c.purchases.map(p => p.date)).size;
+        const uDates = new Set(ps.map(p => p.date)).size;
         sum -= (c.shippingCharges * uDates);
       }
       return sum;
@@ -1225,9 +1237,10 @@
       let rev = 0, pc = 0;
       clients.forEach(c => {
         let cRev = 0;
-        c.purchases.forEach(p => { cRev += p.qty * p.price; pc++; });
+        const ps = c.purchases || [];
+        ps.forEach(p => { cRev += p.qty * p.price; pc++; });
         if (c.shippingCharges) {
-          const uDates = new Set(c.purchases.map(p => p.date)).size;
+          const uDates = new Set(ps.map(p => p.date)).size;
           cRev -= (c.shippingCharges * uDates);
         }
         rev += cRev;
