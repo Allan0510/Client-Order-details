@@ -1173,13 +1173,15 @@
     // ── storage ──
     const supaUrl = 'https://nxkdcukkdezdzzmtjjyu.supabase.co';
     const supaKey = 'sb_publishable_sv9SMiWmpxz8_mjRL_vVcA_9TQKkZIq';
-    const supabase = window.supabase.createClient(supaUrl, supaKey);
+    let supabase = null;
 
     let clients = [];
     let editId = null, curHid = null;
 
     async function initDb() {
       try {
+        if (!window.supabase) throw new Error("Supabase SDK missing");
+        supabase = window.supabase.createClient(supaUrl, supaKey);
         const { data, error } = await supabase.from('clients').select('*');
         if (error) {
           console.error('Error loading Supabase data:', error);
@@ -1191,6 +1193,7 @@
         }
       } catch(err) {
         console.error('Network or init error:', err);
+        supabase = null;
         loadLocal();
       }
       render();
@@ -1202,14 +1205,19 @@
         if (local && local.length > 0) {
           clients = local.map(c => ({...c, purchases: c.purchases || []}));
         }
-      } catch(e) { console.error('Local JSON Error:', e); }
+      } catch(e) { console.error('Local JSON error:', e); }
     }
     initDb();
 
     async function save() {
       if(!clients.length) return;
-      const { error } = await supabase.from('clients').upsert(clients);
-      if (error) console.error('Supabase Save Error:', error);
+      localStorage.setItem('cv2_clients', JSON.stringify(clients));
+      if (supabase) {
+        try {
+          const { error } = await supabase.from('clients').upsert(clients);
+          if (error) console.error('Supabase Save Error:', error);
+        } catch(e) { console.error('Supabase network error:', e); }
+      }
     }
     function uid() { return Date.now() + Math.floor(Math.random() * 9999); }
     function avCls(id) { return 'av' + (id % 6); }
@@ -1355,7 +1363,16 @@
     function deleteClient(id) {
       if (!confirm('Delete this client and ALL their purchase history? This cannot be undone.')) return;
       clients = clients.filter(c => c.id !== id);
-      supabase.from('clients').delete().eq('id', id).then(() => render(document.getElementById('srch').value));
+      
+      // Update local storage immediately
+      localStorage.setItem('cv2_clients', JSON.stringify(clients));
+      
+      // Sync deletion to cloud silently
+      if (supabase) {
+        supabase.from('clients').delete().eq('id', id)
+          .catch(e => console.error('Cloud delete failed', e));
+      }
+
       render(document.getElementById('srch').value);
     }
 
