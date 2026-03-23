@@ -1170,45 +1170,45 @@
 
   <script>
     // ── storage ──
-    let clients = JSON.parse(localStorage.getItem('cv2_clients') || 'null');
+    let clients = [];
     let editId = null, curHid = null;
 
-    if (!clients || clients.length === 0) {
-      clients = [
-        {
-          id: 1, name: 'Alexandra Chen', phone: '+1 415 555 0192', address: '742 Evergreen Terrace, San Francisco, CA', lastPurchase: '2025-03-10',
-          shippingCharges: 0,
-          purchases: [
-            { id: 101, product: 'MacBook Pro M3', qty: 1, price: 2499, date: '2025-03-10' },
-            { id: 102, product: 'Magic Keyboard', qty: 2, price: 129, date: '2025-01-22' },
-            { id: 103, product: 'iPhone 15 Pro', qty: 1, price: 1199, date: '2024-11-05' },
-          ]
-        },
-        {
-          id: 2, name: 'Marcus Reynolds', phone: '+1 312 555 0874', address: '1600 Pennsylvania Ave, Chicago, IL', lastPurchase: '2025-02-28',
-          shippingCharges: 0,
-          purchases: [
-            { id: 201, product: 'Gaming PC Setup', qty: 1, price: 3200, date: '2025-02-28' },
-            { id: 202, product: 'Mechanical Keyboard', qty: 1, price: 249, date: '2024-12-15' },
-          ]
-        },
-        {
-          id: 3, name: 'Sofia Morales', phone: '+1 305 555 0321', address: '88 Ocean Drive, Miami, FL', lastPurchase: '2025-03-15',
-          shippingCharges: 0,
-          purchases: [
-            { id: 301, product: 'Sony A7R V Camera', qty: 1, price: 3899, date: '2025-03-15' },
-            { id: 302, product: 'Camera Lens 85mm', qty: 2, price: 1200, date: '2025-03-15' },
-          ]
-        },
-      ];
-      save();
-    } else {
-      // Ensure all existing clients have a purchases array to prevent crashes
-      clients = clients.map(c => ({...c, purchases: c.purchases || []}));
+    async function initDb() {
+      try {
+        const response = await fetch('/api/load');
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+          clients = data.map(c => ({...c, purchases: c.purchases || []}));
+        } else {
+          // Backward compatibility: try migrating old localStorage data to laptop
+          const local = JSON.parse(localStorage.getItem('cv2_clients') || 'null');
+          if (local && local.length > 0) {
+            clients = local.map(c => ({...c, purchases: c.purchases || []}));
+            save(); // Immediately upload phone's local data to the laptop!
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load from laptop server:', err);
+        alert('Warning: Could not connect to the laptop. Using temporary local offline mode!');
+        const local = JSON.parse(localStorage.getItem('cv2_clients') || 'null');
+        if (local) clients = local.map(c => ({...c, purchases: c.purchases || []}));
+      }
+      render();
     }
+    initDb();
 
-    function save() { 
-      localStorage.setItem('cv2_clients', JSON.stringify(clients)); 
+    async function save() {
+      localStorage.setItem('cv2_clients', JSON.stringify(clients)); // Keep local backup just in case
+      try {
+        await fetch('/api/save', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(clients)
+        });
+      } catch (err) {
+        console.error('Failed to save to laptop:', err);
+      }
     }
     function uid() { return Date.now() + Math.floor(Math.random() * 9999); }
     function avCls(id) { return 'av' + (id % 6); }
