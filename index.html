@@ -1237,9 +1237,12 @@
       clients.forEach(c => {
         let cRev = 0;
         const ps = c.purchases || [];
-        ps.forEach(p => { cRev += p.qty * p.price; pc++; });
+        ps.forEach(p => { cRev += p.qty * p.price; });
+        
+        const uDates = new Set(ps.map(p => p.date)).size;
+        pc += uDates; // Count purchases as unique days per customer
+        
         if (c.shippingCharges) {
-          const uDates = new Set(ps.map(p => p.date)).size;
           cRev -= (c.shippingCharges * uDates);
         }
         rev += cRev;
@@ -1385,16 +1388,18 @@
       document.getElementById('hSC').textContent = c.shippingCharges ? 'Shipping Charges: ' + fmtM(c.shippingCharges) : '';
 
       const ps = c.purchases || [];
+      const uDates = new Set(ps.map(p => p.date)).size;
+      
       let total = ps.reduce((s, p) => s + p.qty * p.price, 0);
       if (c.shippingCharges) {
-        const uDates = new Set(ps.map(p => p.date)).size;
         total -= (c.shippingCharges * uDates);
       }
-      const avg = ps.length ? total / ps.length : 0;
+      
+      const avg = uDates ? total / uDates : 0;
       const sorted = [...ps].sort((a, b) => b.date.localeCompare(a.date));
       const lastD = sorted.length ? fmtD(sorted[0].date) : '—';
 
-      document.getElementById('hOrds').textContent = ps.length;
+      document.getElementById('hOrds').textContent = uDates;
       document.getElementById('hSpent').textContent = fmtM(total);
       document.getElementById('hAvg').textContent = fmtM(avg);
       document.getElementById('hLast').textContent = lastD;
